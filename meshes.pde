@@ -4,7 +4,8 @@ import processing.opengl.*;
 
 float time = 0;  // keep track of passing of time (for automatic rotation)
 boolean rotate_flag = true;       // automatic rotation of model?
-
+MeshObj currMesh;
+boolean keyPressedYet;
 // initialize stuff
 void setup() {
   size(400, 400, OPENGL);  // must use OPENGL here !!!
@@ -45,13 +46,35 @@ void draw() {
   
   // THIS IS WHERE YOU SHOULD DRAW THE MESH
   
-  beginShape();
-  normal (0.0, 0.0, 1.0);
-  vertex (-1.0, -1.0, 0.0);
-  vertex ( 1.0, -1.0, 0.0);
-  vertex ( 1.0,  1.0, 0.0);
-  vertex (-1.0,  1.0, 0.0);
-  endShape(CLOSE);
+  
+  if(!keyPressedYet){
+    beginShape();
+    normal (0.0, 0.0, 1.0);
+    vertex (-1.0, -1.0, 0.0);
+    vertex ( 1.0, -1.0, 0.0);
+    vertex ( 1.0,  1.0, 0.0);
+    vertex (-1.0,  1.0, 0.0);
+    endShape(CLOSE);
+  }
+  else{
+    Vertex currFace1, currFace2, currFace3;
+    for(int numFace=0; numFace<(currMesh.geometry.length)/3; numFace++){
+      beginShape();
+//      println("numFace: " + numFace*3);
+//      println("faces: " + currMesh.geometry[numFace*3] + " " + currMesh.geometry[numFace*3+1] + " " + currMesh.geometry[numFace*3+2]);
+      currFace1 = currMesh.verticies.get(currMesh.geometry[numFace*3]);
+      currFace2 = currMesh.verticies.get(currMesh.geometry[numFace*3+1]);
+      currFace3 = currMesh.verticies.get(currMesh.geometry[numFace*3+2]);
+//      println("vertex1: " + currFace1.x + " " + currFace1.y + " " + currFace1.z);
+//      println("vertex2: " + currFace2.x + " " + currFace2.y + " " + currFace2.z);
+//      println("vertex3: " + currFace3.x + " " + currFace3.y + " " + currFace3.z);
+      vertex (currFace1.x,  currFace1.y, currFace1.z);
+      vertex (currFace2.x,  currFace2.y, currFace2.z);
+      vertex (currFace3.x,  currFace3.y, currFace3.z);
+      endShape(CLOSE);
+    }
+  }
+  
   
   popMatrix();
  
@@ -64,18 +87,23 @@ void draw() {
 void keyPressed() {
   if (key == '1') {
     read_mesh ("tetra.ply");
+    keyPressedYet = true;
   }
   else if (key == '2') {
     read_mesh ("octa.ply");
+    keyPressedYet = true;
   }
   else if (key == '3') {
     read_mesh ("icos.ply");
+    keyPressedYet = true;
   }
   else if (key == '4') {
     read_mesh ("star.ply");
+    keyPressedYet = true;
   }
   else if (key == '5') {
     read_mesh ("torus.ply");
+    keyPressedYet = true;
   }
   else if (key == '6') {
     create_sphere();                     // create a sphere
@@ -85,6 +113,15 @@ void keyPressed() {
   }
   else if (key == 'q' || key == 'Q') {
     exit();                               // quit the program
+  }
+  else if (key == 'd') {
+    rotate_flag = !rotate_flag;          // triangulated dual
+  }
+  else if (key == 'n') {
+    rotate_flag = !rotate_flag;          // toggle per face and per vertex normal
+  }
+  else if (key == 'w') {
+    rotate_flag = !rotate_flag;          // change color
   }
 }
 
@@ -101,19 +138,24 @@ void read_mesh (String filename)
   
   words = split (lines[0], " ");
   int num_vertices = int(words[1]);
-  println ("number of vertices = " + num_vertices);
+  // println ("number of vertices = " + num_vertices);
   
   words = split (lines[1], " ");
   int num_faces = int(words[1]);
-  println ("number of faces = " + num_faces);
+  // println ("number of faces = " + num_faces);
+  
+  currMesh = new MeshObj(num_vertices,num_faces);
   
   // read in the vertices
+  Vertex currVertex;
   for (i = 0; i < num_vertices; i++) {
     words = split (lines[i+2], " ");
-    float x = float(words[0]);
-    float y = float(words[1]);
-    float z = float(words[2]);
-    println ("vertex = " + x + " " + y + " " + z);
+    currVertex = new Vertex(float(words[0]),float(words[1]),float(words[2]));
+    currMesh.verticies.add(currVertex);
+    // float x = float(words[0]);
+    // float y = float(words[1]);
+    // float z = float(words[2]);
+    // println ("vertex = " + x + " " + y + " " + z);
   }
   
   // read in the faces
@@ -127,13 +169,70 @@ void read_mesh (String filename)
       println ("error: this face is not a triangle.");
       exit();
     }
-    
-    int index1 = int(words[1]);
-    int index2 = int(words[2]);
-    int index3 = int(words[3]);
-    println ("face = " + index1 + " " + index2 + " " + index3);
+    currMesh.geometry[i*3] = int(words[1]); 
+    currMesh.geometry[i*3+1] = int(words[2]); 
+    currMesh.geometry[i*3+2] = int(words[3]); 
+//    int index1 = int(words[1]);
+//    int index2 = int(words[2]);
+//    int index3 = int(words[3]);
+//    println ("face = " + currMesh.geometry[i*3] + " " + currMesh.geometry[i*3+1] + " " + currMesh.geometry[i*3+2]);
   }
+  
+  
+  // fill in corners table
+  Vertex aNextVert, bPrevVert, aPrevVert, bNextVert;
+  for(int a=0; a<currMesh.geometry.length; a++){
+    for(int b=0; b<currMesh.geometry.length; b++){
+      aNextVert = currMesh.verticies.get(currMesh.geometry[nextCorner(a)]);
+      bPrevVert = currMesh.verticies.get(currMesh.geometry[prevCorner(b)]);
+      aPrevVert = currMesh.verticies.get(currMesh.geometry[prevCorner(a)]);
+      bNextVert = currMesh.verticies.get(currMesh.geometry[nextCorner(b)]);
+      if((aNextVert.equalTo(bPrevVert))&&(aPrevVert.equalTo(bNextVert))){
+        currMesh.opposite[a] = b;
+        currMesh.opposite[b] = a;
+      }
+    }
+  }
+  
+  
 }
 
 void create_sphere() {}
 
+int nextCorner(int currCorner){
+  int triangleCorner = currCorner/3;
+  return triangleCorner*3 + ((currCorner+1)%3);
+}
+
+int prevCorner(int currCorner){
+  int nextC = nextCorner(currCorner);
+  return nextCorner(nextC);
+}
+
+private class MeshObj{
+  ArrayList<Vertex> verticies;
+  int[] opposite;
+  int[] geometry;
+  MeshObj(int numVert, int numFace){
+    geometry = new int[3*numFace];
+    opposite = new int[3*numFace];
+    verticies = new ArrayList<Vertex>();
+  }
+}
+
+private class Vertex{
+  float x;
+  float y;
+  float z;
+  Vertex(float vertX, float vertY, float vertZ){
+    x = vertX;
+    y = vertY;
+    z = vertZ;
+  }
+  public boolean equalTo(Vertex otherVert){
+    if(otherVert.x==x && otherVert.y==y && otherVert.z==z){
+      return true;
+    }
+    return false;
+  }
+}
